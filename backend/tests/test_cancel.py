@@ -38,7 +38,11 @@ def test_cancel_kills_process_group(tmp_path, monkeypatch):
     run = Run("test-run", "proj", tmp_path / "run")
     node = _FakeNode(tmp_path / "art" / "out")
     log_path = tmp_path / "job.log"
-    node_runner = runner.make_node_runner(run)
+    # 0.0.4: labels are looked up on the DAG, so the runner takes it.
+    class _FakeDag:
+        def label_for(self, node):
+            return getattr(node, 'pipeline_label', None)
+    node_runner = runner.make_node_runner(run, _FakeDag())
 
     raised: list[BaseException] = []
 

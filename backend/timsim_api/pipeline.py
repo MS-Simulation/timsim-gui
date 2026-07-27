@@ -23,7 +23,7 @@ import hashlib
 import os
 from pathlib import Path
 
-from necroflow import NodeType, Pipeline, Rules
+from necroflow import NodeType, Pipeline, command, output
 
 BIN = os.environ.get("TIMSIM_BIN", "target/release")
 
@@ -102,15 +102,15 @@ class YieldReport(NodeType):
 
 # ── rules ────────────────────────────────────────────────────────────────────
 
-r = Rules()
 
 
-@r.command(f"{BIN}/timsim-proteome --spec {{proteome_spec}} --out {{proteome}}")
+@command(f"{BIN}/timsim-proteome --spec {{proteome_spec}} --out {{proteome}}")
 def proteome(proteome_spec: str):
-    return Proteome[proteome]
+    proteome = output(Proteome)
+    return proteome
 
 
-@r.command(
+@command(
     f"{BIN}/timsim-digest --proteome {{proteome}} "
     "--out-peptides {peptides} --out-occurrences {occurrences} "
     "--out-cleavage-sites {cleavage_sites} "
@@ -118,32 +118,36 @@ def proteome(proteome_spec: str):
     "--max-length {max_length}"
 )
 def digest(proteome: Proteome, max_missed_cleavages: int, min_length: int, max_length: int):
-    return Peptides[peptides], Occurrences[occurrences], CleavageSites[cleavage_sites]
+    peptides = output(Peptides)
+    occurrences = output(Occurrences)
+    cleavage_sites = output(CleavageSites)
+    return peptides, occurrences, cleavage_sites
 
 
-@r.command(
+@command(
     f"{BIN}/timsim-modify --peptides {{peptides}} --mods {{mods_spec}} "
     "--out-modforms {modforms} --out-modifications {modifications} --floor {floor}"
 )
 def modify(peptides: Peptides, mods_spec: str, floor: float):
-    return Modforms[modforms], Modifications[modifications]
+    modforms = output(Modforms)
+    modifications = output(Modifications)
+    return modforms, modifications
 
 
-@r.command(
+@command(
     f"{BIN}/timsim-design --proteome {{proteome}} --spec {{design_spec}} "
     "--out-samples {samples} --out-runs {runs} --out-sample-run-map {sample_run_map} "
     "--out-protein-quantities {protein_quantities}"
 )
 def design(proteome: Proteome, design_spec: str):
-    return (
-        Samples[samples],
-        Runs[runs],
-        SampleRunMap[sample_run_map],
-        ProteinQuantities[protein_quantities],
-    )
+    samples = output(Samples)
+    runs = output(Runs)
+    sample_run_map = output(SampleRunMap)
+    protein_quantities = output(ProteinQuantities)
+    return samples, runs, sample_run_map, protein_quantities
 
 
-@r.command(
+@command(
     f"{BIN}/timsim-yield --proteome {{proteome}} --occurrences {{occurrences}} "
     "--cleavage-sites {cleavage_sites} --protein-quantities {protein_quantities} "
     "--modifications {modifications} "
@@ -158,7 +162,9 @@ def peptide_yield(
     modifications: Modifications,
     digestion_efficiency: float,
 ):
-    return PeptideQuantities[peptide_quantities], YieldReport[yield_report]
+    peptide_quantities = output(PeptideQuantities)
+    yield_report = output(YieldReport)
+    return peptide_quantities, yield_report
 
 
 # ── the trimmed pipeline ──────────────────────────────────────────────────────
@@ -177,27 +183,26 @@ REQUEST_LABELS = (
 )
 
 
-def sample_designer_pipeline(cfg) -> Pipeline:
+def sample_designer_pipeline(P: Pipeline, cfg) -> None:
     """Build the trimmed pipeline. `cfg` exposes the namespaced spec paths + digest/modify/yield knobs.
 
     Required attributes: proteome_spec, design_spec, mods_spec (paths); max_missed_cleavages,
     min_length, max_length, floor, digestion_efficiency. The seed lives inside the design spec.
     """
-    P = Pipeline()
-    P.proteome = r.proteome(proteome_spec=cfg.proteome_spec)
-    P.peptides, P.occurrences, P.cleavage_sites = r.digest(
+    P.proteome = proteome(P, proteome_spec=cfg.proteome_spec)
+    P.peptides, P.occurrences, P.cleavage_sites = digest(P, 
         P.proteome,
         max_missed_cleavages=cfg.max_missed_cleavages,
         min_length=cfg.min_length,
         max_length=cfg.max_length,
     )
-    P.modforms, P.modifications = r.modify(
+    P.modforms, P.modifications = modify(P, 
         P.peptides, mods_spec=cfg.mods_spec, floor=cfg.floor
     )
-    P.samples, P.runs, P.sample_run_map, P.protein_quantities = r.design(
+    P.samples, P.runs, P.sample_run_map, P.protein_quantities = design(P, 
         P.proteome, design_spec=cfg.design_spec
     )
-    P.peptide_quantities, P.yield_report = r.peptide_yield(
+    P.peptide_quantities, P.yield_report = peptide_yield(P, 
         P.proteome,
         P.occurrences,
         P.cleavage_sites,
@@ -205,7 +210,6 @@ def sample_designer_pipeline(cfg) -> Pipeline:
         P.modifications,
         digestion_efficiency=cfg.digestion_efficiency,
     )
-    return P
 
 
 def request_nodes(P: Pipeline) -> list:

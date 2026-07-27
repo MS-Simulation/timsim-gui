@@ -15,7 +15,9 @@ from pathlib import Path
 import pytest
 
 REPO = Path(__file__).resolve().parents[2]
-BIN_DIR = REPO / "rustims" / "target" / "release"
+# Point TIMSIM_BIN at a timsim-cli checkout's target/release (this repo does not vendor
+# the Rust binaries — it is an independent front-end).
+BIN_DIR = Path(os.environ.get("TIMSIM_BIN", REPO / "rustims" / "target" / "release"))
 REQUIRED = ["timsim-proteome", "timsim-digest", "timsim-modify", "timsim-design", "timsim-yield"]
 
 _TMP = tempfile.mkdtemp(prefix="timsim-api-test-")
@@ -106,11 +108,11 @@ def test_qc_flow():
 def test_multicondition_still_supported():
     """The backend keeps the fold-change answer-key path even though the QC GUI does not use it."""
     pid = client.post("/api/projects").json()["project_id"]
-    design = DesignSpec.from_toml_str((REPO / "flow" / "design.toml").read_text()).model_dump()
+    design = DesignSpec.from_toml_str((Path(__file__).resolve().parent / "golden" / "design.toml").read_text()).model_dump()
     design["design"]["n_proteins"] = None  # demo FASTAs have few proteins
     req = {
         "proteome_sources": [{"dataset_id": x} for x in ("demo-human", "demo-yeast", "demo-ecoli")],
-        "mods": ModsSpec.from_toml_str((REPO / "flow" / "mods.toml").read_text()).model_dump(),
+        "mods": ModsSpec.from_toml_str((Path(__file__).resolve().parent / "golden" / "mods.toml").read_text()).model_dump(),
         "design": design,
     }
     run_id = client.post(f"/api/projects/{pid}/runs", json=req).json()["run_id"]

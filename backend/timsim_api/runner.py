@@ -18,8 +18,8 @@ import time
 from dataclasses import dataclass
 from pathlib import Path
 
-from necroflow import DAG, classify_nodes
-from necroflow.dag import resolve_command
+from necroflow import DAG, Pipeline, classify_nodes
+from necroflow import resolve_command
 
 from .pipeline import REQUEST_LABELS, request_nodes, sample_designer_pipeline
 from .runs import Run, RunRegistry
@@ -60,10 +60,12 @@ def write_specs(ws: Workspace, params) -> PipelineCfg:
 
 
 def _build(ws: Workspace, cfg: PipelineCfg):
+    # necroflow 0.0.4: the Pipeline owns the DAG, the factory fills it in place, and nodes carry final
+    # fingerprints + paths on return (no dag.add / resolve_paths step).
     dag = DAG(ws.cache_dir)
-    P = sample_designer_pipeline(cfg)
-    dag.add(P, request=request_nodes(P))
-    dag.resolve_paths(ws.cache_dir)
+    P = Pipeline(dag)
+    sample_designer_pipeline(P, cfg)
+    dag.require(request_nodes(P))
     return dag, P
 
 
@@ -77,7 +79,8 @@ def plan(ws: Workspace, params) -> list[dict]:
         state = node.state.name if node.state is not None else "UNKNOWN"
         out.append(
             {
-                "label": node.pipeline_label,
+                # 0.0.4 removed Node.pipeline_label; labels now live on the DAG/Pipeline.
+                "label": dag.label_for(node),
                 "artifact": node.node_type.__name__,
                 "state": state,
                 "cached": state == "UP_TO_DATE",
@@ -100,11 +103,12 @@ def _user_safe(node_label: str | None, exc: BaseException) -> str:
     return f"A simulation stage failed{where}. See the run log for details. ({type(exc).__name__})"
 
 
-def make_node_runner(run: Run):
+def make_node_runner(run: Run, dag):
     """A necroflow `node_runner(node, log_path)` that streams output and honours cancellation."""
 
     def runner(node, log_path: Path) -> None:
-        label = node.pipeline_label or node.node_type.__name__
+        # 0.0.4 removed Node.pipeline_label; labels are looked up on the DAG.
+        label = dag.label_for(node) or node.node_type.__name__
         cmd = resolve_command(node)
         run.append_event(kind="node", node=label, phase="start")
         node.path.parent.mkdir(parents=True, exist_ok=True)
@@ -153,7 +157,7 @@ def launch(registry: RunRegistry, ws: Workspace, params) -> Run:
         run.set_state("running")
         current = {"label": None}
         try:
-            dag.execute(node_runner=make_node_runner(run), keep_going=False)
+            dag.execute(node_runner=make_node_runner(run, dag), keep_going=False)
         except BaseException as exc:  # noqa: BLE001 — we translate to a durable terminal state
             if run.cancelled.is_set():
                 run.set_state("cancelled")

@@ -22,8 +22,10 @@ from timsim_api.schema import (
     SampleDesignerParams,
 )
 
-REPO = Path(__file__).resolve().parents[2]
-FLOW = REPO / "flow"
+# The golden specs are vendored as test fixtures: this repo is independent, so it cannot reach into a
+# sibling flow checkout for them. They are copies of the flow's configs — if the spec format changes there,
+# refresh these.
+FLOW = Path(__file__).resolve().parent / "golden"
 
 
 # ── semantic round-trips against the checked-in golden specs ─────────────────────────────────────

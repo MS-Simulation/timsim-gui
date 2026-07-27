@@ -19,7 +19,9 @@ from pathlib import Path
 import pytest
 
 REPO = Path(__file__).resolve().parents[2]
-BIN_DIR = REPO / "rustims" / "target" / "release"
+# Point TIMSIM_BIN at a timsim-cli checkout's target/release (this repo does not vendor
+# the Rust binaries — it is an independent front-end).
+BIN_DIR = Path(os.environ.get("TIMSIM_BIN", REPO / "rustims" / "target" / "release"))
 os.environ.setdefault("TIMSIM_BIN", str(BIN_DIR))
 
 from timsim_api.pipeline import (  # noqa: E402
@@ -33,7 +35,7 @@ from timsim_api.schema import (  # noqa: E402
     SampleDesignerParams,
 )
 
-from necroflow import DAG  # noqa: E402
+from necroflow import DAG, Pipeline  # noqa: E402
 
 REQUIRED_BINS = ["timsim-proteome", "timsim-digest", "timsim-modify", "timsim-design", "timsim-yield"]
 pytestmark = pytest.mark.skipif(
@@ -77,7 +79,7 @@ def test_sample_designer_end_to_end(tmp_path: Path):
         proteome=ProteomeSpec(
             sources=[{"path": str(fasta_dir / f"{org}.fasta"), "organism": org} for org in organisms]
         ),
-        mods=ModsSpec.from_toml_str((REPO / "flow" / "mods.toml").read_text()),
+        mods=ModsSpec.from_toml_str((Path(__file__).resolve().parent / "golden" / "mods.toml").read_text()),
         design=DesignSpec(
             design={"reference": "A", "load_ng": 200, "seed": 42},
             abundance={org: {"source": "hockeystick"} for org in organisms},
@@ -105,8 +107,9 @@ def test_sample_designer_end_to_end(tmp_path: Path):
 
     outdir = ws / "runs"
     dag = DAG(outdir)
-    P = sample_designer_pipeline(Cfg)
-    dag.add(P, request=request_nodes(P))
+    P = Pipeline(dag)
+    sample_designer_pipeline(P, Cfg)
+    dag.require(request_nodes(P))
     report = dag.execute()  # raises on first failure
 
     # Every requested artifact exists.

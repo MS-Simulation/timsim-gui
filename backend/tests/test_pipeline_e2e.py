@@ -11,18 +11,22 @@ Skipped automatically if the Rust binaries are not built.
 
 from __future__ import annotations
 
-import os
 import random
 import tomllib
 from pathlib import Path
 
 import pytest
 
-REPO = Path(__file__).resolve().parents[2]
-# Point TIMSIM_BIN at a timsim-cli checkout's target/release (this repo does not vendor
-# the Rust binaries — it is an independent front-end).
-BIN_DIR = Path(os.environ.get("TIMSIM_BIN", REPO / "rustims" / "target" / "release"))
-os.environ.setdefault("TIMSIM_BIN", str(BIN_DIR))
+from conftest import timsim_bin_skip_reason
+
+# TIMSIM_BIN must point at a timsim-cli checkout's target/release. This repo vendors no Rust
+# binaries and deliberately has NO fallback path: the old default (<repo>/rustims/target/release)
+# no longer exists, so with TIMSIM_BIN unset this whole file skipped silently — a false green.
+# Now the skip is explicit, names the env var, and conftest reports it in the pytest header and
+# terminal summary so a green run can never be mistaken for a run that exercised the pipeline.
+_SKIP_REASON = timsim_bin_skip_reason()
+if _SKIP_REASON is not None:
+    pytest.skip(_SKIP_REASON, allow_module_level=True)
 
 from timsim_api.pipeline import (  # noqa: E402
     request_nodes,
@@ -36,12 +40,6 @@ from timsim_api.schema import (  # noqa: E402
 )
 
 from necroflow import DAG, Pipeline  # noqa: E402
-
-REQUIRED_BINS = ["timsim-proteome", "timsim-digest", "timsim-modify", "timsim-design", "timsim-yield"]
-pytestmark = pytest.mark.skipif(
-    not all((BIN_DIR / b).exists() for b in REQUIRED_BINS),
-    reason=f"timsim binaries not built in {BIN_DIR}",
-)
 
 _AA = "ACDEFGHIKLMNPQRSTVWY"
 

@@ -14,20 +14,20 @@ from pathlib import Path
 
 import pytest
 
-REPO = Path(__file__).resolve().parents[2]
-# Point TIMSIM_BIN at a timsim-cli checkout's target/release (this repo does not vendor
-# the Rust binaries — it is an independent front-end).
-BIN_DIR = Path(os.environ.get("TIMSIM_BIN", REPO / "rustims" / "target" / "release"))
-REQUIRED = ["timsim-proteome", "timsim-digest", "timsim-modify", "timsim-design", "timsim-yield"]
+from conftest import timsim_bin_skip_reason  # noqa: E402
+
+# TIMSIM_BIN must point at a timsim-cli checkout's target/release. This repo vendors no Rust
+# binaries and deliberately has NO fallback path: the old default (<repo>/rustims/target/release)
+# no longer exists, so with TIMSIM_BIN unset this whole file skipped silently — a false green.
+# Now the skip is explicit, names the env var, and conftest reports it in the pytest header and
+# terminal summary so a green run can never be mistaken for a run that exercised the pipeline.
+_SKIP_REASON = timsim_bin_skip_reason()
+if _SKIP_REASON is not None:
+    # Module-level skip, not just a mark: importing timsim_api.app raises when TIMSIM_BIN is unset.
+    pytest.skip(_SKIP_REASON, allow_module_level=True)
 
 _TMP = tempfile.mkdtemp(prefix="timsim-api-test-")
 os.environ["TIMSIM_DATA_ROOT"] = _TMP
-os.environ.setdefault("TIMSIM_BIN", str(BIN_DIR))
-
-pytestmark = pytest.mark.skipif(
-    not all((BIN_DIR / b).exists() for b in REQUIRED),
-    reason=f"timsim binaries not built in {BIN_DIR}",
-)
 
 from fastapi.testclient import TestClient  # noqa: E402
 

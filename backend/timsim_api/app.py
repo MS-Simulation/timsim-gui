@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import json
 import os
+import stat
 import time
 import warnings
 from pathlib import Path
@@ -32,12 +33,29 @@ if not _TIMSIM_BIN:
         "See https://github.com/theGreatHerrLebert/timsim-cli; this front-end does not vendor the "
         "Rust stage binaries."
     )
-_MISSING_BINARIES = [b for b in _STAGE_BINARIES if not (Path(_TIMSIM_BIN) / b).exists()]
+
+
+def _is_runnable(path: Path) -> bool:
+    """True only for a real, executable *file*.
+
+    `.exists()` alone is not enough: a *directory* named `timsim-digest`, or a non-executable
+    leftover of that name, would pass it and let the app start with a command prefix that can only
+    fail at run time with a confusing errno. Require a regular file (following symlinks, so a
+    symlinked binary still counts) carrying the owner-executable bit.
+    """
+    try:
+        st = path.stat()  # follows symlinks; raises if dangling/absent
+    except OSError:
+        return False
+    return stat.S_ISREG(st.st_mode) and bool(st.st_mode & stat.S_IXUSR)
+
+
+_MISSING_BINARIES = [b for b in _STAGE_BINARIES if not _is_runnable(Path(_TIMSIM_BIN) / b)]
 if _MISSING_BINARIES:
     warnings.warn(
-        f"TIMSIM_BIN={_TIMSIM_BIN} is missing stage binaries: "
-        f"{', '.join(_MISSING_BINARIES)}. Runs will fail until they are built "
-        "(`cargo build --release` in the timsim-cli checkout).",
+        f"TIMSIM_BIN={_TIMSIM_BIN} has no runnable stage binary for: "
+        f"{', '.join(_MISSING_BINARIES)} (each must be an executable file). Runs will fail until "
+        "they are built (`cargo build --release` in the timsim-cli checkout).",
         RuntimeWarning,
         stacklevel=2,
     )

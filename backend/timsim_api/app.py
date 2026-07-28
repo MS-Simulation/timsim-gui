@@ -10,11 +10,37 @@ from __future__ import annotations
 import json
 import os
 import time
+import warnings
 from pathlib import Path
 
-# Resolve the Rust binaries before importing the pipeline module (it reads $TIMSIM_BIN at import).
-_REPO = Path(__file__).resolve().parents[2]
-os.environ.setdefault("TIMSIM_BIN", str(_REPO / "rustims" / "target" / "release"))
+# Check the Rust binaries before importing the pipeline module (it reads $TIMSIM_BIN at import).
+# This repo is a front-end and deliberately vendors no binaries, so there is no honest default:
+# refuse to start with an actionable message instead of failing later with "command not found".
+_STAGE_BINARIES = (
+    "timsim-proteome",
+    "timsim-digest",
+    "timsim-modify",
+    "timsim-design",
+    "timsim-yield",
+)
+_TIMSIM_BIN = os.environ.get("TIMSIM_BIN", "").strip()
+if not _TIMSIM_BIN:
+    raise RuntimeError(
+        "TIMSIM_BIN is not set. Point it at a timsim-cli checkout's target/release directory — "
+        "the one holding " + ", ".join(_STAGE_BINARIES) + " — e.g.\n"
+        "    export TIMSIM_BIN=/path/to/timsim-cli/target/release\n"
+        "See https://github.com/theGreatHerrLebert/timsim-cli; this front-end does not vendor the "
+        "Rust stage binaries."
+    )
+_MISSING_BINARIES = [b for b in _STAGE_BINARIES if not (Path(_TIMSIM_BIN) / b).exists()]
+if _MISSING_BINARIES:
+    warnings.warn(
+        f"TIMSIM_BIN={_TIMSIM_BIN} is missing stage binaries: "
+        f"{', '.join(_MISSING_BINARIES)}. Runs will fail until they are built "
+        "(`cargo build --release` in the timsim-cli checkout).",
+        RuntimeWarning,
+        stacklevel=2,
+    )
 
 from fastapi import FastAPI, HTTPException  # noqa: E402
 from fastapi.responses import StreamingResponse  # noqa: E402

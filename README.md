@@ -37,12 +37,37 @@ The backend drives necroflow directly, so it can answer *"what would this cost?"
 Specs are written to stable paths so necroflow's content invalidator fires exactly when a spec's *contents*
 change — editing a mixture restages the work it should, and nothing else.
 
+## What else the backend gives you
+
+- **Curated server-side datasets, no external data required.** `backend/timsim_api/datasets.py` holds a
+  registry of datasets by id (`demo-hela`, `demo-human`, `demo-yeast`, `demo-ecoli`); their FASTAs are
+  generated deterministically (fixed seed, tryptic sites and S/T/Y/M/C residues so the modification presets
+  actually produce modforms) on first use. `GET /api/enums` lists them. Real curated proteomes (SwissProt
+  HUMAN, …) slot into the same registry.
+- **A path-free security model.** The client sends *dataset ids*, never filesystem paths — the backend
+  resolves ids to files and owns the whole layout, so a served instance cannot be talked into reading
+  arbitrary paths. Unknown ids are a 400.
+- **Durable per-project workspaces + a run registry.** `POST /api/projects` mints a workspace under
+  `$TIMSIM_DATA_ROOT` (default `/tmp/timsim-data`) with its own `specs/`, `cache/` and `runs/`, so the
+  necroflow cache — and therefore the plan preview's reuse-vs-rerun answer — survives across runs. One
+  active run per project: a second `POST /api/projects/{id}/runs` gets a **409**. Runs left non-terminal by
+  a backend restart are reconciled to `lost` at startup instead of hanging as "running" forever.
+- **SSE with replay, so a client can reconnect.** Every run persists a numbered event log
+  (`events.jsonl`) alongside its state; `GET /api/runs/{id}/events?since=<seq>` replays from that sequence
+  number and then tails, so a dropped connection resumes without gaps. SSE is the delivery channel, not the
+  source of truth.
+- **Results and artifacts endpoints.** `GET /api/runs/{id}/results` computes scientist-legible feedback
+  (replicate structure, realized biological CV, unique-peptide/modform counts, dynamic range, digestion-yield
+  accounting) from the Parquet artifacts with polars plus the `timsim-yield --report` TOML — never by
+  scraping logs; `GET /api/runs/{id}/artifacts/{label}?limit=&offset=` pages any produced parquet directly.
+
 ## Running it
 
 ```bash
-# backend
-pip install -e backend            # fastapi, pydantic, necroflow
-export TIMSIM_BIN=/path/to/timsim-cli/target/release   # the Rust stage binaries
+# backend (Python ≥ 3.11)
+python -m venv .venv && source .venv/bin/activate
+pip install -e backend      # fastapi, pydantic, uvicorn, necroflow ≥ 0.0.4, polars, tomlkit
+export TIMSIM_BIN=/path/to/timsim-cli/target/release   # required: the Rust stage binaries
 uvicorn timsim_api.app:app --reload
 
 # frontend
@@ -50,11 +75,17 @@ cd frontend && npm install && npm run dev
 ```
 
 `TIMSIM_BIN` points at a [timsim-cli](https://github.com/theGreatHerrLebert/timsim-cli) checkout's
-`target/release`; this repo is a front-end and deliberately does not vendor the binaries.
+`target/release`; this repo is a front-end and deliberately does not vendor the binaries. There is no
+default, so the backend refuses to start without it (and warns if the directory is missing stage
+binaries) rather than failing later with a mysterious "command not found".
+
+`TIMSIM_DATA_ROOT` (default `/tmp/timsim-data`) is where project workspaces and the curated FASTAs live —
+set it to something durable if you want projects to outlive a reboot.
 
 ## Tests
 
 ```bash
+pip install -e "backend[test]"    # adds pytest + httpx (the FastAPI test client)
 TIMSIM_BIN=/path/to/timsim-cli/target/release PYTHONPATH=backend pytest backend/tests
 ```
 

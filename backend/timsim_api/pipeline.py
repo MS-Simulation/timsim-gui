@@ -4,14 +4,17 @@ STRUCTURE + QUANTITY + DESIGN only — proteome -> digest -> modify -> design ->
 measurement render (precursors/ccs/rt/simulate) is deliberately absent: this slice must run in
 seconds-to-minutes and produce scientific feedback without building a `.d`.
 
-Two deliberate differences from `flow/timsim_flow.py`:
+Two conventions worth calling out (both now shared with `flow/timsim_flow.py` upstream):
 
 1. **Namespaced spec config keys** — `proteome_spec`, `design_spec`, `mods_spec`, never a bare
-   `spec`. `flow/timsim_flow.py` uses `spec` for *both* the proteome and design rules; necroflow's
-   `_accumulated_config` flattens ancestor configs into one namespace and assumes key names are
-   unique, so the two `spec`s collide and one silently overwrites the other in the provenance record
-   (`dependencies.toml`). Provenance is load-bearing for a scientific GUI, so we namespace here and
-   assert all three survive (`backend/tests/test_pipeline_e2e.py`).
+   `spec`. necroflow's `_accumulated_config` flattens ancestor configs into one namespace and
+   assumes key names are unique, so naming both the proteome and the design spec `spec` makes them
+   collide and one silently overwrites the other in the provenance record (`dependencies.toml`).
+   Provenance is load-bearing for a scientific GUI, so we namespace here and assert all three
+   survive (`backend/tests/test_pipeline_e2e.py`). This was once a divergence from
+   `flow/timsim_flow.py`, which used a bare `spec` for both rules; upstream namespaces its spec
+   keys the same way now (timsim-necro 49f0c65), so the test stands as a regression guard rather
+   than a difference.
 2. **`yield --report` is wired as a guaranteed co-output** (`YieldReport`) — the tool always writes
    the report when `--report` is passed, so it is safe to declare as a co-output (it cannot poison
    cache classification by sometimes being absent).

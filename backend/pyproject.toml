@@ -1,0 +1,31 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "timsim-api"
+version = "0.1.0"
+description = "FastAPI backend for the timsim v2 Sample & Experiment Designer GUI"
+requires-python = ">=3.11"
+dependencies = [
+    # web surface
+    "fastapi>=0.110",
+    "pydantic>=2.6",
+    "uvicorn>=0.27",       # the documented server: `uvicorn timsim_api.app:app --reload`
+    # pipeline + artifacts
+    "necroflow>=0.0.4",    # module-level rule API (command/output, Pipeline(dag), dag.require)
+    "polars>=0.20",        # reads the parquet artifacts for /results and /artifacts
+    "tomlkit>=0.12",       # emits the three spec TOMLs (tomllib, stdlib >=3.11, reads them back)
+]
+
+[project.optional-dependencies]
+test = [
+    "pytest>=8",
+    "httpx>=0.27",         # required by fastapi.testclient.TestClient
+]
+
+[project.urls]
+Homepage = "https://github.com/theGreatHerrLebert/timsim-gui"
+
+[tool.hatch.build.targets.wheel]
+packages = ["timsim_api"]

@@ -25,7 +25,7 @@ test = [
 ]
 
 [project.urls]
-Homepage = "https://github.com/theGreatHerrLebert/timsim-gui"
+Homepage = "https://github.com/MS-Simulation/timsim-gui"
 
 [tool.hatch.build.targets.wheel]
 packages = ["timsim_api"]

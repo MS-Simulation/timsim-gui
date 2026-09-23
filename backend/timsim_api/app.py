@@ -30,7 +30,7 @@ if not _TIMSIM_BIN:
         "TIMSIM_BIN is not set. Point it at a timsim-cli checkout's target/release directory — "
         "the one holding " + ", ".join(_STAGE_BINARIES) + " — e.g.\n"
         "    export TIMSIM_BIN=/path/to/timsim-cli/target/release\n"
-        "See https://github.com/theGreatHerrLebert/timsim-cli; this front-end does not vendor the "
+        "See https://github.com/MS-Simulation/timsim-cli; this front-end does not vendor the "
         "Rust stage binaries."
     )
 

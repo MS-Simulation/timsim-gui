@@ -1,6 +1,6 @@
 # timsim-gui — Sample & Experiment Designer
 
-A task-first web GUI for the [timsim v2](https://github.com/theGreatHerrLebert/timsim-necro) proteomics
+A task-first web GUI for the [timsim v2](https://github.com/MS-Simulation/timsim-necro) proteomics
 simulator: describe an experiment the way a lab scientist would, get a
 [necroflow](https://github.com/MatteoLacki/necroflow) DAG planned, run it with live progress, and read the
 scientific feedback back.
@@ -74,7 +74,7 @@ uvicorn timsim_api.app:app --reload
 cd frontend && npm install && npm run dev
 ```
 
-`TIMSIM_BIN` points at a [timsim-cli](https://github.com/theGreatHerrLebert/timsim-cli) checkout's
+`TIMSIM_BIN` points at a [timsim-cli](https://github.com/MS-Simulation/timsim-cli) checkout's
 `target/release`; this repo is a front-end and deliberately does not vendor the binaries. There is no
 default, so the backend refuses to start without it (and warns if the directory is missing stage
 binaries) rather than failing later with a mysterious "command not found".
